@@ -48,15 +48,6 @@ function looksLikeShort(item) {
   );
 }
 
-async function sendStartupMessage() {
-  try {
-    await bot.sendMessage(CHANNEL, '✅ Telegram YouTube bot is connected and running.');
-    console.log('Startup message sent.');
-  } catch (err) {
-    console.log('Startup message failed:', err.message);
-  }
-}
-
 async function postLatestVideo(item, isTest = false) {
   const videoId = item.id?.split(':').pop();
 
@@ -129,7 +120,6 @@ async function checkYouTube() {
 }
 
 async function start() {
-  await sendStartupMessage();
   await checkYouTube();
   setInterval(checkYouTube, CHECK_INTERVAL_MS);
 }
