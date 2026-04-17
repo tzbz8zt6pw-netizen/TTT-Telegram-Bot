@@ -63,7 +63,6 @@ async function postVideo(item, mode = 'live') {
   const caption =
     `🎥 *New TTT Video on YouTube*\n\n` +
     `*${item.title}*\n\n` +
-    `Fresh content just landed from TTT Markets.\n\n` +
     `Tap below to watch 👇`;
 
   await bot.sendPhoto(CHANNEL, getThumbnail(videoId), {
