@@ -10,68 +10,128 @@ const parser = new Parser();
 
 const CHANNEL = process.env.TG_CHANNEL;
 const YT_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
+const CHECK_INTERVAL_MS = 300000;
+const TEST_LATEST_VIDEO =
+  String(process.env.TEST_LATEST_VIDEO || 'false').toLowerCase() === 'true';
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
-// Load last video
 function loadState() {
   if (!fs.existsSync(STATE_FILE)) {
     return { lastVideoId: null };
   }
-  return JSON.parse(fs.readFileSync(STATE_FILE));
+
+  try {
+    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+  } catch {
+    return { lastVideoId: null };
+  }
 }
 
-// Save last video
 function saveState(data) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
 }
 
-// Get thumbnail
 function getThumbnail(id) {
   return `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`;
 }
 
-// Check YouTube
+function looksLikeShort(item) {
+  const title = String(item?.title || '').toLowerCase();
+  const link = String(item?.link || '').toLowerCase();
+
+  return (
+    title.includes('#shorts') ||
+    title.startsWith('shorts') ||
+    title.includes(' short ') ||
+    link.includes('/shorts/')
+  );
+}
+
+async function sendStartupMessage() {
+  try {
+    await bot.sendMessage(CHANNEL, '✅ Telegram YouTube bot is connected and running.');
+    console.log('Startup message sent.');
+  } catch (err) {
+    console.log('Startup message failed:', err.message);
+  }
+}
+
+async function postLatestVideo(item, isTest = false) {
+  const videoId = item.id?.split(':').pop();
+
+  if (!videoId) {
+    console.log('No valid video ID found.');
+    return;
+  }
+
+  const caption =
+    `${isTest ? '🧪 Test Latest Video\n\n' : '🎥 New Video Dropped\n\n'}` +
+    `${item.title}\n\n` +
+    `Watch now:\n${item.link}`;
+
+  await bot.sendPhoto(CHANNEL, getThumbnail(videoId), {
+    caption,
+  });
+
+  console.log(`${isTest ? 'Test-posted' : 'Posted'} video: ${item.title}`);
+}
+
 async function checkYouTube() {
   try {
     const feed = await parser.parseURL(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`
     );
 
-    const latest = feed.items[0];
-    const videoId = latest.id.split(':').pop();
-
-    const state = loadState();
-
-    // First run (do NOT post old video)
-    if (!state.lastVideoId) {
-      state.lastVideoId = videoId;
-      saveState(state);
-      console.log('Initial video saved, no post');
+    if (!feed.items || feed.items.length === 0) {
+      console.log('No feed items found.');
       return;
     }
 
-    // New video detected
-    if (videoId !== state.lastVideoId) {
-      const caption = `🎥 *New Video Dropped*\n\n${latest.title}\n\n👉 Watch now:\n${latest.link}`;
+    const latest = feed.items[0];
+    const videoId = latest.id?.split(':').pop();
 
-      await bot.sendPhoto(CHANNEL, getThumbnail(videoId), {
-        caption: caption,
-        parse_mode: 'Markdown',
-      });
+    if (!videoId) {
+      console.log('No valid video ID found.');
+      return;
+    }
+
+    if (looksLikeShort(latest)) {
+      console.log('Latest upload looks like a Short. Skipping.');
+      return;
+    }
+
+    if (TEST_LATEST_VIDEO) {
+      await postLatestVideo(latest, true);
+      return;
+    }
+
+    const state = loadState();
+
+    if (!state.lastVideoId) {
+      state.lastVideoId = videoId;
+      saveState(state);
+      console.log('Initial video saved, no post.');
+      return;
+    }
+
+    if (videoId !== state.lastVideoId) {
+      await postLatestVideo(latest, false);
 
       state.lastVideoId = videoId;
       saveState(state);
-
-      console.log('Posted new video');
+    } else {
+      console.log('No new video.');
     }
   } catch (err) {
-    console.log('Error:', err.message);
+    console.log('YouTube check failed:', err.message);
   }
 }
 
-// Run every 5 mins
-setInterval(checkYouTube, 300000);
+async function start() {
+  await sendStartupMessage();
+  await checkYouTube();
+  setInterval(checkYouTube, CHECK_INTERVAL_MS);
+}
 
-// Run once on start
-checkYouTube();
+start();
