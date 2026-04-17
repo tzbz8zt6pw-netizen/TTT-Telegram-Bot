@@ -59,13 +59,8 @@ async function postVideo(item, mode = 'live') {
     return;
   }
 
-  const titlePrefix =
-    mode === 'force'
-      ? '🧪 TTT Test Video'
-      : '🎥 New TTT Video';
-
   const caption =
-    `${titlePrefix}\n\n` +
+    `🎥 New TTT Video\n\n` +
     `${item.title}\n\n` +
     `Fresh content just landed from TTT Markets.`;
 
@@ -94,7 +89,6 @@ async function forcePostLatestVideos(feedItems, count) {
     return;
   }
 
-  // oldest first for cleaner order
   const ordered = [...filtered].reverse();
 
   for (const item of ordered) {
