@@ -10,6 +10,7 @@ const parser = new Parser();
 
 const CHANNEL = process.env.TG_CHANNEL;
 const YT_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
+const WEBSITE_URL = process.env.WEBSITE_URL || 'https://tttmarkets.com';
 const CHECK_INTERVAL_MS = 300000;
 
 const TEST_LATEST_VIDEO =
@@ -60,18 +61,26 @@ async function postVideo(item, mode = 'live') {
   }
 
   const caption =
-    `🎥 New TTT Video\n\n` +
-    `${item.title}\n\n` +
-    `Fresh content just landed from TTT Markets.`;
+    `🎥 *New TTT Video on YouTube*\n\n` +
+    `*${item.title}*\n\n` +
+    `Fresh content just landed from TTT Markets.\n\n` +
+    `Tap below to watch 👇`;
 
   await bot.sendPhoto(CHANNEL, getThumbnail(videoId), {
     caption,
+    parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
         [
           {
-            text: '▶️ Watch Now',
+            text: '▶️ Watch Video',
             url: item.link,
+          },
+        ],
+        [
+          {
+            text: '🌐 Visit Website',
+            url: WEBSITE_URL,
           },
         ],
       ],
