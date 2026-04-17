@@ -11,8 +11,11 @@ const parser = new Parser();
 const CHANNEL = process.env.TG_CHANNEL;
 const YT_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
 const CHECK_INTERVAL_MS = 300000;
+
 const TEST_LATEST_VIDEO =
   String(process.env.TEST_LATEST_VIDEO || 'false').toLowerCase() === 'true';
+
+const FORCE_POST_COUNT = Number(process.env.FORCE_POST_COUNT || 0);
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -48,7 +51,7 @@ function looksLikeShort(item) {
   );
 }
 
-async function postLatestVideo(item, isTest = false) {
+async function postVideo(item, mode = 'live') {
   const videoId = item.id?.split(':').pop();
 
   if (!videoId) {
@@ -56,16 +59,50 @@ async function postLatestVideo(item, isTest = false) {
     return;
   }
 
+  const titlePrefix =
+    mode === 'force'
+      ? '🧪 TTT Test Video'
+      : '🎥 New TTT Video';
+
   const caption =
-    `${isTest ? '🧪 Test Latest Video\n\n' : '🎥 New Video Dropped\n\n'}` +
+    `${titlePrefix}\n\n` +
     `${item.title}\n\n` +
-    `Watch now:\n${item.link}`;
+    `Fresh content just landed from TTT Markets.`;
 
   await bot.sendPhoto(CHANNEL, getThumbnail(videoId), {
     caption,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: '▶️ Watch Now',
+            url: item.link,
+          },
+        ],
+      ],
+    },
   });
 
-  console.log(`${isTest ? 'Test-posted' : 'Posted'} video: ${item.title}`);
+  console.log(`${mode === 'force' ? 'Force-posted' : 'Posted'} video: ${item.title}`);
+}
+
+async function forcePostLatestVideos(feedItems, count) {
+  const filtered = feedItems.filter(item => !looksLikeShort(item)).slice(0, count);
+
+  if (filtered.length === 0) {
+    console.log('No valid videos available to force post.');
+    return;
+  }
+
+  // oldest first for cleaner order
+  const ordered = [...filtered].reverse();
+
+  for (const item of ordered) {
+    await postVideo(item, 'force');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+
+  console.log(`Force-posted ${ordered.length} video(s).`);
 }
 
 async function checkYouTube() {
@@ -79,7 +116,14 @@ async function checkYouTube() {
       return;
     }
 
-    const latest = feed.items[0];
+    const recentItems = feed.items.slice(0, 10);
+
+    if (FORCE_POST_COUNT > 0) {
+      await forcePostLatestVideos(recentItems, Math.min(FORCE_POST_COUNT, 2));
+      return;
+    }
+
+    const latest = recentItems[0];
     const videoId = latest.id?.split(':').pop();
 
     if (!videoId) {
@@ -93,7 +137,7 @@ async function checkYouTube() {
     }
 
     if (TEST_LATEST_VIDEO) {
-      await postLatestVideo(latest, true);
+      await postVideo(latest, 'force');
       return;
     }
 
@@ -107,7 +151,7 @@ async function checkYouTube() {
     }
 
     if (videoId !== state.lastVideoId) {
-      await postLatestVideo(latest, false);
+      await postVideo(latest, 'live');
 
       state.lastVideoId = videoId;
       saveState(state);
